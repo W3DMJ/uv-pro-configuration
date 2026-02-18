@@ -35,7 +35,7 @@ if [ -n "$CONNECTED" ]; then
                 echo "Configuring $HOSTNAME"
 		        if [[ "$HOSTNAME" == "[computername_1]" ]]; then 
                     IP="10.0.0.1" 
-                elif [[ "$HOSTNAME" == "computername_2" ]]; then 
+                elif [[ "$HOSTNAME" == "[computername_2]" ]]; then 
                     IP="10.0.0.2"
                 fi
 	        fi
