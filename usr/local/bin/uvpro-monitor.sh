@@ -1,22 +1,57 @@
 #!/bin/bash
-#MAC="00:00:00:00:00:00"
-AXPORT="$1"
+
+# Usage:
+#   script.sh --connect [AXPORT]
+#   script.sh --disconnect
+#   script.sh [AXPORT]     # legacy behavior
+
+ACTION=""
+AXPORT=""
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --connect)
+            ACTION="connect"
+            shift
+            ;;
+        --disconnect)
+            ACTION="disconnect"
+            shift
+            ;;
+        *)
+            AXPORT="$1"
+            shift
+            ;;
+    esac
+done
+
+# Find MAC of UV‑PRO
 MAC=$(bluetoothctl devices | grep -i "UV-PRO" | awk '{print $2}')
-if [[ -n "$MAC" ]]; then 
-    echo "Found UV-PRO: $MAC" 
+
+if [[ -z "$MAC" ]]; then
+    echo "No UV-PRO device found."
+    exit 1
 fi
 
-CONNECTED=$(bluetoothctl info $MAC | grep "Connected: yes")
+echo "Found UV-PRO: $MAC"
 
-if [ -n "$CONNECTED" ]; then
-    echo "UV-PRO is connected. Configuring for AX.25"
-    # If rfcomm0 does not exist, create it
-    if [ ! -e /dev/rfcomm0 ]; then
-        /usr/bin/rfcomm connect 0 $MAC 1 &
+# -----------------------------
+# FUNCTIONS
+# -----------------------------
+
+connect_and_configure() {
+    echo "Connecting and configuring UV-PRO…"
+
+    CONNECTED=$(bluetoothctl info "$MAC" | grep "Connected: yes")
+
+    if [[ -z "$CONNECTED" ]]; then
+        echo "Connecting to UV-PRO…"
+        /usr/bin/rfcomm connect 0 "$MAC" 1 &
         sleep 1
     fi
 
-    # Only attach AX.25 if not already attached
+    # Attach AX.25 if not already attached
     if [ -e /dev/rfcomm0 ] && ! ip link show ax0 >/dev/null 2>&1; then
         if [[ -z "$AXPORT" ]]; then
             /usr/sbin/kissattach /dev/rfcomm0 1
@@ -24,37 +59,56 @@ if [ -n "$CONNECTED" ]; then
         else
             /usr/sbin/kissattach /dev/rfcomm0 "$AXPORT"
             /usr/sbin/kissparms -p "$AXPORT" -t 250 -l 50 -s 10 -r 32
-            if [[ "$AXPORT" -eq 2 ]]; then 
+
+            # Host-specific IP config
+            if [[ "$AXPORT" -eq 2 || "$AXPORT" -eq 3 ]]; then
                 echo "Configuring $HOSTNAME"
-		        if [[ "$HOSTNAME" == "[computername_1]" ]]; then 
-                    IP="10.0.0.1" 
-               elif [[ "$HOSTNAME" == "[computername_2]" ]]; then 
+                if [[ "$HOSTNAME" == "[computername_1]" ]]; then
+                    IP="10.0.0.1"
+                elif [[ "$HOSTNAME" == "[computername_2]" ]]; then
                     IP="10.0.0.2"
                 fi
-            elif [[ "$AXPORT" -eq 3 ]]; then 
-                echo "Configuring $HOSTNAME"
-		        if [[ "$HOSTNAME" == "[computername_1]" ]]; then 
-                    IP="10.0.0.1" 
-                elif [[ "$HOSTNAME" == "[computername_2]" ]]; then 
-                    IP="10.0.0.2"
-                fi
-	        fi
-            
-	        echo "Configuring IP: $IP"
-            ifconfig ax0 "$IP" netmask 255.255.255.252 up
-            #ip route add "$IP" dev ax2 
-            
+
+                echo "Configuring IP: $IP"
+                ifconfig ax0 "$IP" netmask 255.255.255.252 up
+            fi
         fi
     fi
 
-else
-    echo "UV-PRO is not connected. Cleaning up."
-    # Clean shutdown
-    #if ip link show ax0 >/dev/null 2>&1; then
-        killall kissattach 2>/dev/null
-        sleep 1
-    #fi
+    echo "UV-PRO configured."
+}
+
+disconnect_cleanup() {
+    echo "Disconnecting UV-PRO and cleaning up…"
+
+    killall kissattach 2>/dev/null
+    sleep 1
 
     /usr/bin/rfcomm release 0 2>/dev/null
-fi
 
+    echo "Cleanup complete."
+}
+
+# -----------------------------
+# MAIN LOGIC
+# -----------------------------
+
+case "$ACTION" in
+    connect)
+        connect_and_configure
+        exit 0
+        ;;
+    disconnect)
+        disconnect_cleanup
+        exit 0
+        ;;
+esac
+
+# Default legacy behavior
+CONNECTED=$(bluetoothctl info "$MAC" | grep "Connected: yes")
+
+if [[ -n "$CONNECTED" ]]; then
+    connect_and_configure
+else
+    disconnect_cleanup
+fi
