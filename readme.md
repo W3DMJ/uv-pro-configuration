@@ -37,18 +37,18 @@ Your `uv-monitor.sh` script supports explicit connect and disconnect commands.
 Use the AXPORT number from `/etc/ax25/axports`:
 
 ```
-sudo uv-monitor.sh --connect [AXPORT]
+sudo uv-monitor.sh connect [AXPORT]
 ```
 
 Example:
 
 ```
-sudo uv-monitor.sh --connect 1
+sudo uv-monitor.sh connect 1
 ```
 
 ### **Disconnect the UV‑Pro**
 
 ```
-sudo uv-monitor.sh --disconnect
+sudo uv-monitor.sh disconnect
 ```
 
