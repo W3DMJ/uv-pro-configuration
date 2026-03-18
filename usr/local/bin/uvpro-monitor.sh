@@ -11,11 +11,11 @@ AXPORT=""
 # Parse arguments
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --connect)
+        connect)
             ACTION="connect"
             shift
             ;;
-        --disconnect)
+        disconnect)
             ACTION="disconnect"
             shift
             ;;
@@ -46,9 +46,17 @@ connect_and_configure() {
     CONNECTED=$(bluetoothctl info "$MAC" | grep "Connected: yes")
 
     if [[ -z "$CONNECTED" ]]; then
-        echo "Connecting to UV-PRO…"
-        /usr/bin/rfcomm connect 0 "$MAC" 1 &
-        sleep 1
+        echo "Connecting to UV-PRO ..."
+        /usr/bin/rfcomm bind 0 "$MAC" 1 &
+        sleep 5
+    else 
+        $(bluetoothctl connect "$MAC")
+        CONNECTED=$(bluetoothctl info "$MAC" | grep "Connected: yes")
+        if [[ -z "$CONNECTED" ]]; then
+            /usr/bin/rfcomm bind 0 "$MAC" 1
+            sleep 5
+            
+        fi
     fi
 
     # Attach AX.25 if not already attached
@@ -73,6 +81,10 @@ connect_and_configure() {
                 ifconfig ax0 "$IP" netmask 255.255.255.252 up
             fi
         fi
+    else
+        echo "/dev/rfcomm0 not found"
+        echo "UV-PRO was not configured."
+        exit
     fi
 
     echo "UV-PRO configured."
@@ -85,6 +97,9 @@ disconnect_cleanup() {
     sleep 1
 
     /usr/bin/rfcomm release 0 2>/dev/null
+
+    MAC=$(bluetoothctl devices | grep -i "UV-PRO" | awk '{print $2}')
+    bluetoothctl disconnect "$MAC"
 
     echo "Cleanup complete."
 }
@@ -105,7 +120,7 @@ case "$ACTION" in
 esac
 
 # Default legacy behavior
-CONNECTED=$(bluetoothctl info "$MAC" | grep "Connected: yes")
+#CONNECTED=$(bluetoothctl info "$MAC" | grep "Connected: yes")
 
 if [[ -n "$CONNECTED" ]]; then
     connect_and_configure
